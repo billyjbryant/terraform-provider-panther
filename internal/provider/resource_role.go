@@ -19,6 +19,8 @@ package provider
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strings"
 	"terraform-provider-panther/internal/client"
 	"terraform-provider-panther/internal/client/panther"
 
@@ -27,8 +29,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
 var (
@@ -37,6 +39,7 @@ var (
 	_ resource.ResourceWithImportState = (*roleResource)(nil)
 )
 
+// NewRoleResource creates a new role resource.
 func NewRoleResource() resource.Resource {
 	return &roleResource{}
 }
@@ -51,10 +54,12 @@ type roleResourceModel struct {
 	Permissions types.List   `tfsdk:"permissions"`
 }
 
+// Metadata returns the resource type name.
 func (r *roleResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_role"
 }
 
+// Schema defines the schema for the role resource.
 func (r *roleResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "Manages a Panther role for user permissions.",
@@ -74,11 +79,15 @@ func (r *roleResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 				ElementType:         types.StringType,
 				Required:            true,
 				MarkdownDescription: "List of permissions assigned to the role",
+				PlanModifiers: []planmodifier.List{
+					listplanmodifier.UseStateForUnknown(),
+				},
 			},
 		},
 	}
 }
 
+// Configure configures the resource with the provider client.
 func (r *roleResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	if req.ProviderData == nil {
 		return
@@ -96,6 +105,59 @@ func (r *roleResource) Configure(_ context.Context, req resource.ConfigureReques
 	r.client = c.GraphQLClient
 }
 
+// filterRedundantReadPermissions removes *Read permissions when corresponding *Modify permissions exist.
+// The Panther API automatically grants Read access with Modify permissions.
+func filterRedundantReadPermissions(permissions []string) []string {
+	permissionSet := make(map[string]bool)
+	for _, perm := range permissions {
+		permissionSet[perm] = true
+	}
+	
+	var filtered []string
+	for _, perm := range permissions {
+		if strings.HasSuffix(perm, "Read") {
+			baseName := strings.TrimSuffix(perm, "Read")
+			modifyPerm := baseName + "Modify"
+			if permissionSet[modifyPerm] {
+				continue
+			}
+		}
+		filtered = append(filtered, perm)
+	}
+	
+	return filtered
+}
+
+// restoreOriginalPermissions adds back *Read permissions from the original configuration
+// that were filtered out by the API due to corresponding *Modify permissions.
+func restoreOriginalPermissions(apiPermissions []string, originalPermissions []string) []string {
+	apiSet := make(map[string]bool)
+	for _, perm := range apiPermissions {
+		apiSet[perm] = true
+	}
+	
+	originalSet := make(map[string]bool)
+	for _, perm := range originalPermissions {
+		originalSet[perm] = true
+	}
+	
+	result := make([]string, len(apiPermissions))
+	copy(result, apiPermissions)
+	
+	for _, perm := range originalPermissions {
+		if strings.HasSuffix(perm, "Read") && !apiSet[perm] {
+			baseName := strings.TrimSuffix(perm, "Read")
+			modifyPerm := baseName + "Modify"
+			if apiSet[modifyPerm] && originalSet[perm] {
+				result = append(result, perm)
+			}
+		}
+	}
+	
+	return result
+}
+
+// Create creates a new role resource.
 func (r *roleResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var data roleResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
@@ -105,10 +167,12 @@ func (r *roleResource) Create(ctx context.Context, req resource.CreateRequest, r
 
 	var permissions []string
 	data.Permissions.ElementsAs(ctx, &permissions, false)
+	
+	filteredPermissions := filterRedundantReadPermissions(permissions)
 
 	input := client.CreateRoleInput{
 		Name:        data.Name.ValueString(),
-		Permissions: permissions,
+		Permissions: filteredPermissions,
 	}
 
 	output, err := r.client.CreateRole(ctx, input)
@@ -122,18 +186,17 @@ func (r *roleResource) Create(ctx context.Context, req resource.CreateRequest, r
 
 	role := output.Role
 
-	tflog.Debug(ctx, "Created Role", map[string]any{
-		"id": role.ID,
-	})
-
-	// Update the data with the response from the API
-	data.ID = types.StringValue(role.ID)  
+	data.ID = types.StringValue(role.ID)
 	data.Name = types.StringValue(role.Name)
 	
-	// Convert permissions back to list
-	if len(role.Permissions) > 0 {
-		elements := make([]types.String, len(role.Permissions))
-		for i, permission := range role.Permissions {
+	// Store original configuration permissions in state to maintain consistency
+	if len(permissions) > 0 {
+		sortedPermissions := make([]string, len(permissions))
+		copy(sortedPermissions, permissions)
+		sort.Strings(sortedPermissions)
+		
+		elements := make([]types.String, len(sortedPermissions))
+		for i, permission := range sortedPermissions {
 			elements[i] = types.StringValue(permission)
 		}
 		permissionsList, diags := types.ListValueFrom(ctx, types.StringType, elements)
@@ -149,11 +212,18 @@ func (r *roleResource) Create(ctx context.Context, req resource.CreateRequest, r
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
+// Read reads the role resource.
 func (r *roleResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var data roleResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
+	}
+
+	// Extract current permissions from state to preserve order
+	var currentPermissions []string
+	if !data.Permissions.IsNull() && !data.Permissions.IsUnknown() {
+		data.Permissions.ElementsAs(ctx, &currentPermissions, false)
 	}
 
 	role, err := r.client.GetRoleById(ctx, data.ID.ValueString())
@@ -165,17 +235,18 @@ func (r *roleResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 		return
 	}
 
-	tflog.Debug(ctx, "Got Role", map[string]any{
-		"id": role.ID,
-	})
 
 	data.ID = types.StringValue(role.ID)
 	data.Name = types.StringValue(role.Name)
 
-	// Convert permissions back to list
-	if len(role.Permissions) > 0 {
-		elements := make([]types.String, len(role.Permissions))
-		for i, permission := range role.Permissions {
+	// Restore original permissions from configuration to maintain state consistency
+	restoredPermissions := restoreOriginalPermissions(role.Permissions, currentPermissions)
+	
+	if len(restoredPermissions) > 0 {
+		sort.Strings(restoredPermissions)
+		
+		elements := make([]types.String, len(restoredPermissions))
+		for i, permission := range restoredPermissions {
 			elements[i] = types.StringValue(permission)
 		}
 		permissionsList, diags := types.ListValueFrom(ctx, types.StringType, elements)
@@ -191,6 +262,7 @@ func (r *roleResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
+// Update updates the role resource.
 func (r *roleResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var data roleResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
@@ -200,11 +272,13 @@ func (r *roleResource) Update(ctx context.Context, req resource.UpdateRequest, r
 
 	var permissions []string
 	data.Permissions.ElementsAs(ctx, &permissions, false)
+	
+	filteredPermissions := filterRedundantReadPermissions(permissions)
 
 	input := client.UpdateRoleInput{
 		ID:          data.ID.ValueString(),
 		Name:        data.Name.ValueString(),
-		Permissions: permissions,
+		Permissions: filteredPermissions,
 	}
 
 	output, err := r.client.UpdateRole(ctx, input)
@@ -218,18 +292,17 @@ func (r *roleResource) Update(ctx context.Context, req resource.UpdateRequest, r
 
 	role := output.Role
 
-	tflog.Debug(ctx, "Updated Role", map[string]any{
-		"id": role.ID,
-	})
-
-	// Update the data with the response from the API
-	data.ID = types.StringValue(role.ID)  
+	data.ID = types.StringValue(role.ID)
 	data.Name = types.StringValue(role.Name)
 	
-	// Convert permissions back to list
-	if len(role.Permissions) > 0 {
-		elements := make([]types.String, len(role.Permissions))
-		for i, permission := range role.Permissions {
+	// Store original configuration permissions in state to maintain consistency
+	if len(permissions) > 0 {
+		sortedPermissions := make([]string, len(permissions))
+		copy(sortedPermissions, permissions)
+		sort.Strings(sortedPermissions)
+		
+		elements := make([]types.String, len(sortedPermissions))
+		for i, permission := range sortedPermissions {
 			elements[i] = types.StringValue(permission)
 		}
 		permissionsList, diags := types.ListValueFrom(ctx, types.StringType, elements)
@@ -245,6 +318,7 @@ func (r *roleResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
+// Delete deletes the role resource.
 func (r *roleResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var data roleResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
@@ -265,11 +339,9 @@ func (r *roleResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 		return
 	}
 
-	tflog.Debug(ctx, "Deleted Role", map[string]any{
-		"id": data.ID.ValueString(),
-	})
 }
 
+// ImportState imports an existing role resource.
 func (r *roleResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
