@@ -34,6 +34,7 @@ import (
 var (
 	_ resource.Resource              = (*roleResource)(nil)
 	_ resource.ResourceWithConfigure = (*roleResource)(nil)
+	_ resource.ResourceWithImportState = (*roleResource)(nil)
 )
 
 func NewRoleResource() resource.Resource {

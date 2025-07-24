@@ -34,6 +34,7 @@ import (
 var (
 	_ resource.Resource              = (*userResource)(nil)
 	_ resource.ResourceWithConfigure = (*userResource)(nil)
+	_ resource.ResourceWithImportState = (*userResource)(nil)
 )
 
 func NewUserResource() resource.Resource {
