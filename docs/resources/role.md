@@ -34,3 +34,68 @@ resource "panther_role" "example" {
 ### Read-Only
 
 - `id` (String) Role identifier
+
+## Available Permissions
+
+The following table lists all available permissions that can be assigned to a role:
+
+| Permission | Description |
+|------------|-------------|
+| AlertModify | Modify alerts and alert configurations |
+| AlertRead | Read alerts and alert data |
+| BulkUpload | Upload data in bulk operations |
+| CloudsecSourceModify | Modify cloud security data sources |
+| CloudsecSourceRead | Read cloud security data sources |
+| DataAnalyticsModify | Modify data analytics configurations |
+| DataAnalyticsRead | Read data analytics configurations |
+| DestinationModify | Modify alert destinations |
+| DestinationRead | Read alert destinations |
+| GeneralSettingsModify | Modify general system settings |
+| GeneralSettingsRead | Read general system settings |
+| LogSourceModify | Modify log data sources |
+| LogSourceRawDataRead | Read raw log data from sources |
+| LogSourceRead | Read log data sources |
+| LookupModify | Modify lookup tables |
+| LookupRead | Read lookup tables |
+| OrganizationAPITokenModify | Modify organization API tokens |
+| OrganizationAPITokenRead | Read organization API tokens |
+| PolicyModify | Modify compliance policies |
+| PolicyRead | Read compliance policies |
+| ResourceModify | Modify monitored cloud resources |
+| ResourceRead | Read monitored cloud resources |
+| RuleModify | Modify detection rules |
+| RuleRead | Read detection rules |
+| RunPantherAI | Access to Panther AI features |
+| SummaryRead | Read summary data and dashboards |
+| UserModify | Modify user accounts and permissions |
+| UserRead | Read user accounts and permissions |
+
+## Default Roles
+
+Panther includes several default roles with predefined permission sets:
+
+### Admin
+
+Full administrative access with all 16 modify permissions:
+
+- AlertModify, BulkUpload, CloudsecSourceModify, DataAnalyticsModify
+- DestinationModify, GeneralSettingsModify, LogSourceModify, LogSourceRawDataRead
+- LookupModify, OrganizationAPITokenModify, PolicyModify, ResourceModify
+- RuleModify, RunPantherAI, SummaryRead, UserModify
+
+### Analyst
+
+Read permissions with selective modify access (15 permissions):
+
+- DestinationRead, RunPantherAI, BulkUpload, CloudsecSourceRead
+- RuleRead, OrganizationAPITokenRead, ResourceModify, LogSourceRead
+- LookupModify, AlertRead, PolicyRead, DataAnalyticsModify
+- GeneralSettingsRead, SummaryRead, UserRead
+
+### AnalystReadOnly
+
+Read-only access across all areas (13 permissions):
+
+- AlertRead, CloudsecSourceRead, DataAnalyticsRead, DestinationRead
+- GeneralSettingsRead, LogSourceRead, LookupRead, OrganizationAPITokenRead
+- PolicyRead, ResourceRead, RuleRead, SummaryRead, UserRead
