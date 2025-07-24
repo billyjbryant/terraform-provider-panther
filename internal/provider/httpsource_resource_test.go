@@ -124,7 +124,15 @@ func manuallyDeleteSource(s *terraform.State) error {
 	if httpSource.Primary.ID == "" {
 		return errors.New("http source ID is not set")
 	}
-	url := os.Getenv("PANTHER_API_URL") + panther.RestHttpSourcePath + "/" + httpSource.Primary.ID
+	apiURL := os.Getenv("PANTHER_API_URL")
+	var url string
+	if strings.Contains(apiURL, "amazonaws.com") {
+		// AWS API Gateway URL
+		url = fmt.Sprintf("%s/v1%s/%s", apiURL, panther.RestHttpSourcePath, httpSource.Primary.ID)
+	} else {
+		// Direct Panther URL
+		url = fmt.Sprintf("%s%s/%s", apiURL, panther.RestHttpSourcePath, httpSource.Primary.ID)
+	}
 	client := http.DefaultClient
 	req, err := http.NewRequest(http.MethodDelete, url, nil)
 	if err != nil {

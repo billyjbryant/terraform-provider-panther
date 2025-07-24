@@ -17,3 +17,99 @@ resources:
     schema:
       ignores:
         - integrationId
+  rule:
+    create:
+      path: /rules
+      method: POST
+    read:
+      path: /rules/{id}
+      method: GET
+    update:
+      path: /rules/{id}
+      method: PUT
+    delete:
+      path: /rules/{id}
+      method: DELETE
+    schema:
+      ignores:
+        - id
+  policy:
+    create:
+      path: /policies
+      method: POST
+    read:
+      path: /policies/{id}
+      method: GET
+    update:
+      path: /policies/{id}
+      method: PUT
+    delete:
+      path: /policies/{id}
+      method: DELETE
+    schema:
+      ignores:
+        - id
+  user:
+    create:
+      path: /users
+      method: POST
+    read:
+      path: /users/{id}
+      method: GET
+    update:
+      path: /users/{id}
+      method: PUT
+    delete:
+      path: /users/{id}
+      method: DELETE
+    schema:
+      ignores:
+        - id
+  role:
+    create:
+      path: /roles
+      method: POST
+    read:
+      path: /roles/{id}
+      method: GET
+    update:
+      path: /roles/{id}
+      method: PUT
+    delete:
+      path: /roles/{id}
+      method: DELETE
+    schema:
+      ignores:
+        - id
+  datamodel:
+    create:
+      path: /data-models
+      method: POST
+    read:
+      path: /data-models/{id}
+      method: GET
+    update:
+      path: /data-models/{id}
+      method: PUT
+    delete:
+      path: /data-models/{id}
+      method: DELETE
+    schema:
+      ignores:
+        - id
+  global:
+    create:
+      path: /globals
+      method: POST
+    read:
+      path: /globals/{id}
+      method: GET
+    update:
+      path: /globals/{id}
+      method: PUT
+    delete:
+      path: /globals/{id}
+      method: DELETE
+    schema:
+      ignores:
+        - id

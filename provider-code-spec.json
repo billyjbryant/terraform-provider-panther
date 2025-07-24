@@ -4,6 +4,137 @@
 	},
 	"resources": [
 		{
+			"name": "datamodel",
+			"schema": {
+				"attributes": [
+					{
+						"name": "body",
+						"string": {
+							"computed_optional_required": "computed_optional",
+							"description": "The python body of the data model"
+						}
+					},
+					{
+						"name": "description",
+						"string": {
+							"computed_optional_required": "computed_optional",
+							"description": "The description of the data model"
+						}
+					},
+					{
+						"name": "display_name",
+						"string": {
+							"computed_optional_required": "computed_optional",
+							"description": "The name used for the data model"
+						}
+					},
+					{
+						"name": "enabled",
+						"bool": {
+							"computed_optional_required": "computed_optional",
+							"description": "enables/disables a data model"
+						}
+					},
+					{
+						"name": "log_types",
+						"list": {
+							"computed_optional_required": "computed_optional",
+							"element_type": {
+								"string": {}
+							},
+							"description": "The log type this data model should associate to. NOTE: only one data model can be assigned to a log type"
+						}
+					},
+					{
+						"name": "mappings",
+						"list_nested": {
+							"computed_optional_required": "computed_optional",
+							"nested_object": {
+								"attributes": [
+									{
+										"name": "method",
+										"string": {
+											"computed_optional_required": "computed_optional",
+											"description": "the python function name that should be called"
+										}
+									},
+									{
+										"name": "name",
+										"string": {
+											"computed_optional_required": "required",
+											"description": "the name of the mapping"
+										}
+									},
+									{
+										"name": "path",
+										"string": {
+											"computed_optional_required": "computed_optional",
+											"description": "the json path"
+										}
+									}
+								]
+							}
+						}
+					},
+					{
+						"name": "created_at",
+						"string": {
+							"computed_optional_required": "computed"
+						}
+					},
+					{
+						"name": "last_modified",
+						"string": {
+							"computed_optional_required": "computed"
+						}
+					}
+				]
+			}
+		},
+		{
+			"name": "global",
+			"schema": {
+				"attributes": [
+					{
+						"name": "body",
+						"string": {
+							"computed_optional_required": "required",
+							"description": "The python body of the global"
+						}
+					},
+					{
+						"name": "description",
+						"string": {
+							"computed_optional_required": "computed_optional",
+							"description": "The description of the global"
+						}
+					},
+					{
+						"name": "tags",
+						"list": {
+							"computed_optional_required": "computed_optional",
+							"element_type": {
+								"string": {}
+							},
+							"description": "The tags for the global"
+						}
+					},
+					{
+						"name": "created_at",
+						"string": {
+							"computed_optional_required": "computed"
+						}
+					},
+					{
+						"name": "last_modified",
+						"string": {
+							"computed_optional_required": "computed"
+						}
+					}
+				]
+			}
+		},
+		{
 			"name": "httpsource",
 			"schema": {
 				"attributes": [
@@ -124,6 +255,604 @@
 						"string": {
 							"computed_optional_required": "computed_optional",
 							"description": "ID of the http source to fetch"
+						}
+					}
+				]
+			}
+		},
+		{
+			"name": "policy",
+			"schema": {
+				"attributes": [
+					{
+						"name": "body",
+						"string": {
+							"computed_optional_required": "required",
+							"description": "The python body of the policy"
+						}
+					},
+					{
+						"name": "description",
+						"string": {
+							"computed_optional_required": "computed_optional",
+							"description": "The description of the policy"
+						}
+					},
+					{
+						"name": "display_name",
+						"string": {
+							"computed_optional_required": "computed_optional",
+							"description": "The display name of the policy"
+						}
+					},
+					{
+						"name": "enabled",
+						"bool": {
+							"computed_optional_required": "computed_optional",
+							"description": "Determines whether or not the policy is active"
+						}
+					},
+					{
+						"name": "managed",
+						"bool": {
+							"computed_optional_required": "computed_optional",
+							"description": "Determines if the policy is managed by panther"
+						}
+					},
+					{
+						"name": "output_ids",
+						"list": {
+							"computed_optional_required": "computed_optional",
+							"element_type": {
+								"string": {}
+							},
+							"description": "Destination IDs that override default alert routing based on severity"
+						}
+					},
+					{
+						"name": "reports",
+						"map": {
+							"computed_optional_required": "computed_optional",
+							"element_type": {
+								"list": {
+									"element_type": {
+										"string": {}
+									}
+								}
+							},
+							"description": "Reports"
+						}
+					},
+					{
+						"name": "resource_types",
+						"list": {
+							"computed_optional_required": "computed_optional",
+							"element_type": {
+								"string": {}
+							},
+							"description": "Resource types"
+						}
+					},
+					{
+						"name": "severity",
+						"string": {
+							"computed_optional_required": "required",
+							"validators": [
+								{
+									"custom": {
+										"imports": [
+											{
+												"path": "github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+											}
+										],
+										"schema_definition": "stringvalidator.OneOf(\n\"INFO\",\n\"LOW\",\n\"MEDIUM\",\n\"HIGH\",\n\"CRITICAL\",\n)"
+									}
+								}
+							]
+						}
+					},
+					{
+						"name": "suppressions",
+						"list": {
+							"computed_optional_required": "computed_optional",
+							"element_type": {
+								"string": {}
+							},
+							"description": "Resources to ignore via a pattern that matches the resource id"
+						}
+					},
+					{
+						"name": "tags",
+						"list": {
+							"computed_optional_required": "computed_optional",
+							"element_type": {
+								"string": {}
+							},
+							"description": "The tags for the policy"
+						}
+					},
+					{
+						"name": "tests",
+						"list_nested": {
+							"computed_optional_required": "computed_optional",
+							"nested_object": {
+								"attributes": [
+									{
+										"name": "expected_result",
+										"bool": {
+											"computed_optional_required": "required",
+											"description": "The expected result"
+										}
+									},
+									{
+										"name": "mocks",
+										"list": {
+											"computed_optional_required": "computed_optional",
+											"element_type": {
+												"map": {
+													"element_type": {
+														"string": {}
+													}
+												}
+											},
+											"description": "mocks"
+										}
+									},
+									{
+										"name": "name",
+										"string": {
+											"computed_optional_required": "required",
+											"description": "name"
+										}
+									},
+									{
+										"name": "resource",
+										"string": {
+											"computed_optional_required": "required",
+											"description": "resource"
+										}
+									}
+								]
+							},
+							"description": "Unit tests for the Policy. Best practice is to include a positive and negative case"
+						}
+					},
+					{
+						"name": "created_at",
+						"string": {
+							"computed_optional_required": "computed"
+						}
+					},
+					{
+						"name": "created_by",
+						"single_nested": {
+							"computed_optional_required": "computed",
+							"attributes": [
+								{
+									"name": "id",
+									"string": {
+										"computed_optional_required": "computed"
+									}
+								},
+								{
+									"name": "type",
+									"string": {
+										"computed_optional_required": "computed"
+									}
+								}
+							],
+							"description": "The actor who created the rule"
+						}
+					},
+					{
+						"name": "created_by_external",
+						"string": {
+							"computed_optional_required": "computed",
+							"description": "The text of the user-provided CreatedBy field when uploaded via CI/CD"
+						}
+					},
+					{
+						"name": "last_modified",
+						"string": {
+							"computed_optional_required": "computed"
+						}
+					}
+				]
+			}
+		},
+		{
+			"name": "role",
+			"schema": {
+				"attributes": [
+					{
+						"name": "log_type_access",
+						"list": {
+							"computed_optional_required": "computed_optional",
+							"element_type": {
+								"string": {}
+							},
+							"description": "The log types that the role can or cannot access, according to the `logTypeAccessKind` field. This field should be omitted if `logTypeAccessKind` has a value of `ALLOW_ALL` or `DENY_ALL`"
+						}
+					},
+					{
+						"name": "log_type_access_kind",
+						"string": {
+							"computed_optional_required": "computed_optional",
+							"description": "Defines the role's access to log types. This field is required and has effect only if the datalake RBAC feature is enabled.",
+							"validators": [
+								{
+									"custom": {
+										"imports": [
+											{
+												"path": "github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+											}
+										],
+										"schema_definition": "stringvalidator.OneOf(\n\"ALLOW\",\n\"ALLOW_ALL\",\n\"DENY\",\n\"DENY_ALL\",\n)"
+									}
+								}
+							]
+						}
+					},
+					{
+						"name": "name",
+						"string": {
+							"computed_optional_required": "required",
+							"description": "The name of the role"
+						}
+					},
+					{
+						"name": "permissions",
+						"list": {
+							"computed_optional_required": "required",
+							"element_type": {
+								"string": {}
+							}
+						}
+					},
+					{
+						"name": "created_at",
+						"string": {
+							"computed_optional_required": "computed"
+						}
+					},
+					{
+						"name": "updated_at",
+						"string": {
+							"computed_optional_required": "computed"
+						}
+					}
+				]
+			}
+		},
+		{
+			"name": "rule",
+			"schema": {
+				"attributes": [
+					{
+						"name": "body",
+						"string": {
+							"computed_optional_required": "required",
+							"description": "The python body of the rule"
+						}
+					},
+					{
+						"name": "dedup_period_minutes",
+						"int64": {
+							"computed_optional_required": "computed_optional",
+							"default": {
+								"static": 60
+							},
+							"description": "The amount of time in minutes for grouping alerts",
+							"validators": [
+								{
+									"custom": {
+										"imports": [
+											{
+												"path": "github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
+											}
+										],
+										"schema_definition": "int64validator.AtLeast(1)"
+									}
+								}
+							]
+						}
+					},
+					{
+						"name": "description",
+						"string": {
+							"computed_optional_required": "computed_optional",
+							"description": "The description of the rule"
+						}
+					},
+					{
+						"name": "display_name",
+						"string": {
+							"computed_optional_required": "computed_optional",
+							"description": "The display name of the rule"
+						}
+					},
+					{
+						"name": "enabled",
+						"bool": {
+							"computed_optional_required": "computed_optional",
+							"description": "Determines whether or not the rule is active"
+						}
+					},
+					{
+						"name": "inline_filters",
+						"string": {
+							"computed_optional_required": "computed_optional",
+							"description": "The filter for the rule represented in YAML"
+						}
+					},
+					{
+						"name": "log_types",
+						"list": {
+							"computed_optional_required": "computed_optional",
+							"element_type": {
+								"string": {}
+							},
+							"description": "log types"
+						}
+					},
+					{
+						"name": "managed",
+						"bool": {
+							"computed_optional_required": "computed_optional",
+							"description": "Determines if the rule is managed by panther"
+						}
+					},
+					{
+						"name": "output_ids",
+						"list": {
+							"computed_optional_required": "computed_optional",
+							"element_type": {
+								"string": {}
+							},
+							"description": "Destination IDs that override default alert routing based on severity"
+						}
+					},
+					{
+						"name": "reports",
+						"map": {
+							"computed_optional_required": "computed_optional",
+							"element_type": {
+								"list": {
+									"element_type": {
+										"string": {}
+									}
+								}
+							},
+							"description": "reports"
+						}
+					},
+					{
+						"name": "runbook",
+						"string": {
+							"computed_optional_required": "computed_optional",
+							"description": "How to handle the generated alert"
+						}
+					},
+					{
+						"name": "severity",
+						"string": {
+							"computed_optional_required": "required",
+							"validators": [
+								{
+									"custom": {
+										"imports": [
+											{
+												"path": "github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+											}
+										],
+										"schema_definition": "stringvalidator.OneOf(\n\"INFO\",\n\"LOW\",\n\"MEDIUM\",\n\"HIGH\",\n\"CRITICAL\",\n)"
+									}
+								}
+							]
+						}
+					},
+					{
+						"name": "summary_attributes",
+						"list": {
+							"computed_optional_required": "computed_optional",
+							"element_type": {
+								"string": {}
+							},
+							"description": "A list of fields in the event to create top 5 summaries for"
+						}
+					},
+					{
+						"name": "tags",
+						"list": {
+							"computed_optional_required": "computed_optional",
+							"element_type": {
+								"string": {}
+							},
+							"description": "The tags for the rule"
+						}
+					},
+					{
+						"name": "tests",
+						"list_nested": {
+							"computed_optional_required": "computed_optional",
+							"nested_object": {
+								"attributes": [
+									{
+										"name": "expected_result",
+										"bool": {
+											"computed_optional_required": "required",
+											"description": "The expected result"
+										}
+									},
+									{
+										"name": "mocks",
+										"list": {
+											"computed_optional_required": "computed_optional",
+											"element_type": {
+												"map": {
+													"element_type": {
+														"string": {}
+													}
+												}
+											},
+											"description": "mocks"
+										}
+									},
+									{
+										"name": "name",
+										"string": {
+											"computed_optional_required": "required",
+											"description": "name"
+										}
+									},
+									{
+										"name": "resource",
+										"string": {
+											"computed_optional_required": "required",
+											"description": "resource"
+										}
+									}
+								]
+							},
+							"description": "Unit tests for the Rule. Best practice is to include a positive and negative case"
+						}
+					},
+					{
+						"name": "threshold",
+						"int64": {
+							"computed_optional_required": "computed_optional",
+							"default": {
+								"static": 1
+							},
+							"description": "the number of events that must match before an alert is triggered",
+							"validators": [
+								{
+									"custom": {
+										"imports": [
+											{
+												"path": "github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
+											}
+										],
+										"schema_definition": "int64validator.AtLeast(1)"
+									}
+								}
+							]
+						}
+					},
+					{
+						"name": "created_at",
+						"string": {
+							"computed_optional_required": "computed"
+						}
+					},
+					{
+						"name": "created_by",
+						"single_nested": {
+							"computed_optional_required": "computed",
+							"attributes": [
+								{
+									"name": "id",
+									"string": {
+										"computed_optional_required": "computed"
+									}
+								},
+								{
+									"name": "type",
+									"string": {
+										"computed_optional_required": "computed"
+									}
+								}
+							],
+							"description": "The actor who created the rule"
+						}
+					},
+					{
+						"name": "created_by_external",
+						"string": {
+							"computed_optional_required": "computed",
+							"description": "The text of the user-provided CreatedBy field when uploaded via CI/CD"
+						}
+					},
+					{
+						"name": "last_modified",
+						"string": {
+							"computed_optional_required": "computed"
+						}
+					}
+				]
+			}
+		},
+		{
+			"name": "user",
+			"schema": {
+				"attributes": [
+					{
+						"name": "email",
+						"string": {
+							"computed_optional_required": "required",
+							"description": "The email address of the user"
+						}
+					},
+					{
+						"name": "family_name",
+						"string": {
+							"computed_optional_required": "required",
+							"description": "The family/last name of the user"
+						}
+					},
+					{
+						"name": "given_name",
+						"string": {
+							"computed_optional_required": "required",
+							"description": "The given/first name of the user"
+						}
+					},
+					{
+						"name": "role",
+						"single_nested": {
+							"computed_optional_required": "required",
+							"attributes": [
+								{
+									"name": "id",
+									"string": {
+										"computed_optional_required": "computed_optional",
+										"description": "The id of the role. Note: id should be excluded if name is provided during a modify operation"
+									}
+								},
+								{
+									"name": "name",
+									"string": {
+										"computed_optional_required": "computed_optional",
+										"description": "The name of the role. Note: name should be excluded if id is provided during a modify operation"
+									}
+								}
+							]
+						}
+					},
+					{
+						"name": "created_at",
+						"string": {
+							"computed_optional_required": "computed"
+						}
+					},
+					{
+						"name": "enabled",
+						"bool": {
+							"computed_optional_required": "computed",
+							"description": "Whether the user is active or deactivated"
+						}
+					},
+					{
+						"name": "last_logged_in_at",
+						"string": {
+							"computed_optional_required": "computed"
+						}
+					},
+					{
+						"name": "status",
+						"string": {
+							"computed_optional_required": "computed",
+							"description": "The Cognito auth-related status of this User"
 						}
 					}
 				]

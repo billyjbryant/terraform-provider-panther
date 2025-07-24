@@ -128,8 +128,18 @@ func (p *PantherProvider) Configure(ctx context.Context, req provider.ConfigureR
 
 func (p *PantherProvider) Resources(ctx context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
+		// GraphQL-based resources
 		NewS3SourceResource,
+		NewCloudAccountResource,
+		NewUserResource,
+		NewRoleResource,
+		
+		// REST-based resources
 		NewHttpsourceResource,
+		NewRuleResource,
+		
+		// New GraphQL-based resources (to be implemented)
+		// NewSchemaResource,
 	}
 }
 
