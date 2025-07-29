@@ -349,19 +349,21 @@ type DeleteCloudAccountOutput struct {
 
 // GraphQL Schema types
 type Schema struct {
-	ID          string   `graphql:"id"`
-	Name        string   `graphql:"name"`
-	Description string   `graphql:"description"`
-	Spec        string   `graphql:"spec"`
-	Version     int      `graphql:"version"`
-	LogTypes    []string `graphql:"logTypes"`
+	ID                      string   `graphql:"id"`
+	Name                    string   `graphql:"name"`
+	Description             string   `graphql:"description"`
+	Spec                    string   `graphql:"spec"`
+	Version                 int      `graphql:"version"`
+	LogTypes                []string `graphql:"logTypes"`
+	IsFieldDiscoveryEnabled bool     `graphql:"isFieldDiscoveryEnabled"`
 }
 
 type CreateSchemaInput struct {
-	Name        string   `json:"name"`
-	Description string   `json:"description"`
-	Spec        string   `json:"spec"`
-	LogTypes    []string `json:"logTypes"`
+	Name                    string   `json:"name"`
+	Description             string   `json:"description"`
+	Spec                    string   `json:"spec"`
+	LogTypes                []string `json:"logTypes"`
+	IsFieldDiscoveryEnabled bool     `json:"isFieldDiscoveryEnabled"`
 }
 
 type CreateSchemaOutput struct {
@@ -369,11 +371,12 @@ type CreateSchemaOutput struct {
 }
 
 type UpdateSchemaInput struct {
-	ID          string   `json:"id"`
-	Name        string   `json:"name"`
-	Description string   `json:"description"`
-	Spec        string   `json:"spec"`
-	LogTypes    []string `json:"logTypes"`
+	ID                      string   `json:"id"`
+	Name                    string   `json:"name"`
+	Description             string   `json:"description"`
+	Spec                    string   `json:"spec"`
+	LogTypes                []string `json:"logTypes"`
+	IsFieldDiscoveryEnabled bool     `json:"isFieldDiscoveryEnabled"`
 }
 
 type UpdateSchemaOutput struct {
