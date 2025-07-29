@@ -19,6 +19,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"strings"
 	"terraform-provider-panther/internal/client"
 	"terraform-provider-panther/internal/client/panther"
 
@@ -29,6 +30,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -52,6 +54,7 @@ type schemaResourceModel struct {
 	Description             types.String `tfsdk:"description"`
 	Spec                    types.String `tfsdk:"spec"`
 	Version                 types.Int64  `tfsdk:"version"`
+	Revision                types.Int64  `tfsdk:"revision"`
 	LogTypes                types.List   `tfsdk:"log_types"`
 	IsFieldDiscoveryEnabled types.Bool   `tfsdk:"is_field_discovery_enabled"`
 }
@@ -74,6 +77,9 @@ func (r *schemaResource) Schema(ctx context.Context, req resource.SchemaRequest,
 			"name": schema.StringAttribute{
 				Required:            true,
 				MarkdownDescription: "Name of the schema (e.g., 'Custom.MyLog')",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 			},
 			"description": schema.StringAttribute{
 				Required:            true,
@@ -86,6 +92,13 @@ func (r *schemaResource) Schema(ctx context.Context, req resource.SchemaRequest,
 			"version": schema.Int64Attribute{
 				Computed:            true,
 				MarkdownDescription: "Schema version number",
+			},
+			"revision": schema.Int64Attribute{
+				Computed:            true,
+				MarkdownDescription: "Schema revision number",
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.UseStateForUnknown(),
+				},
 			},
 			"log_types": schema.ListAttribute{
 				ElementType:         types.StringType,
@@ -130,17 +143,10 @@ func (r *schemaResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 
-	logTypesSlice := make([]string, 0, len(data.LogTypes.Elements()))
-	resp.Diagnostics.Append(data.LogTypes.ElementsAs(ctx, &logTypesSlice, false)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
 	input := client.CreateSchemaInput{
 		Name:                    data.Name.ValueString(),
 		Description:             data.Description.ValueString(),
 		Spec:                    data.Spec.ValueString(),
-		LogTypes:                logTypesSlice,
 		IsFieldDiscoveryEnabled: data.IsFieldDiscoveryEnabled.ValueBool(),
 	}
 
@@ -155,19 +161,17 @@ func (r *schemaResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 
-	data.ID = types.StringValue(output.Schema.ID)
+	data.ID = types.StringValue(output.Schema.Name)
 	data.Name = types.StringValue(output.Schema.Name)
 	data.Description = types.StringValue(output.Schema.Description)
-	data.Spec = types.StringValue(output.Schema.Spec)
+	// Keep the original spec from config to avoid Terraform inconsistency errors
+	// data.Spec stays as originally planned
 	data.Version = types.Int64Value(int64(output.Schema.Version))
+	data.Revision = types.Int64Value(int64(output.Schema.Revision))
 	data.IsFieldDiscoveryEnabled = types.BoolValue(output.Schema.IsFieldDiscoveryEnabled)
 
-	logTypesList, diags := types.ListValueFrom(ctx, types.StringType, output.Schema.LogTypes)
-	resp.Diagnostics.Append(diags...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-	data.LogTypes = logTypesList
+	// LogTypes field is computed and not available from the GraphQL response
+	data.LogTypes = types.ListNull(types.StringType)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -191,19 +195,25 @@ func (r *schemaResource) Read(ctx context.Context, req resource.ReadRequest, res
 		return
 	}
 
-	data.ID = types.StringValue(schema.ID)
+	data.ID = types.StringValue(schema.Name)
 	data.Name = types.StringValue(schema.Name)
 	data.Description = types.StringValue(schema.Description)
-	data.Spec = types.StringValue(schema.Spec)
+	// Handle API normalization: if current state has trailing newline but API response doesn't, preserve it
+	// But only if we have prior state (not during import)
+	apiSpec := schema.Spec
+	currentSpec := data.Spec.ValueString()
+	if currentSpec != "" && strings.HasSuffix(currentSpec, "\n") && !strings.HasSuffix(apiSpec, "\n") && strings.TrimSpace(currentSpec) == strings.TrimSpace(apiSpec) {
+		// Current state has trailing newline but API doesn't - preserve the original format
+		data.Spec = types.StringValue(apiSpec + "\n")
+	} else {
+		data.Spec = types.StringValue(apiSpec)
+	}
 	data.Version = types.Int64Value(int64(schema.Version))
+	data.Revision = types.Int64Value(int64(schema.Revision))
 	data.IsFieldDiscoveryEnabled = types.BoolValue(schema.IsFieldDiscoveryEnabled)
 
-	logTypesList, diags := types.ListValueFrom(ctx, types.StringType, schema.LogTypes)
-	resp.Diagnostics.Append(diags...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-	data.LogTypes = logTypesList
+	// LogTypes field is computed and not available from the GraphQL response
+	data.LogTypes = types.ListNull(types.StringType)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -216,19 +226,19 @@ func (r *schemaResource) Update(ctx context.Context, req resource.UpdateRequest,
 		return
 	}
 
-	logTypesSlice := make([]string, 0, len(data.LogTypes.Elements()))
-	resp.Diagnostics.Append(data.LogTypes.ElementsAs(ctx, &logTypesSlice, false)...)
-	if resp.Diagnostics.HasError() {
+	// Get current revision for update - this is critical for the API
+	currentRevision := int(data.Revision.ValueInt64())
+	if currentRevision == 0 {
+		resp.Diagnostics.AddError("State Error", "Revision field is 0, indicating state corruption or incomplete resource creation")
 		return
 	}
-
+	
 	input := client.UpdateSchemaInput{
-		ID:                      data.ID.ValueString(),
 		Name:                    data.Name.ValueString(),
 		Description:             data.Description.ValueString(),
 		Spec:                    data.Spec.ValueString(),
-		LogTypes:                logTypesSlice,
 		IsFieldDiscoveryEnabled: data.IsFieldDiscoveryEnabled.ValueBool(),
+		Revision:                &currentRevision,
 	}
 
 	output, err := r.client.UpdateSchema(ctx, input)
@@ -242,19 +252,18 @@ func (r *schemaResource) Update(ctx context.Context, req resource.UpdateRequest,
 		return
 	}
 
-	data.ID = types.StringValue(output.Schema.ID)
+	data.ID = types.StringValue(output.Schema.Name)
 	data.Name = types.StringValue(output.Schema.Name)
 	data.Description = types.StringValue(output.Schema.Description)
-	data.Spec = types.StringValue(output.Schema.Spec)
+	// Keep the original spec from config to avoid Terraform inconsistency errors
+	// data.Spec stays as originally planned
 	data.Version = types.Int64Value(int64(output.Schema.Version))
+	// Keep the planned revision during updates to avoid Terraform inconsistency errors
+	// The revision will be updated during the next Read operation
 	data.IsFieldDiscoveryEnabled = types.BoolValue(output.Schema.IsFieldDiscoveryEnabled)
 
-	logTypesList, diags := types.ListValueFrom(ctx, types.StringType, output.Schema.LogTypes)
-	resp.Diagnostics.Append(diags...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-	data.LogTypes = logTypesList
+	// LogTypes field is computed and not available from the GraphQL response
+	data.LogTypes = types.ListNull(types.StringType)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -268,7 +277,7 @@ func (r *schemaResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	}
 
 	input := client.DeleteSchemaInput{
-		ID: data.ID.ValueString(),
+		Name: data.ID.ValueString(),
 	}
 
 	_, err := r.client.DeleteSchema(ctx, input)

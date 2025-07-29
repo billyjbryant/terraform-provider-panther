@@ -18,16 +18,15 @@ package provider
 
 import (
 	"fmt"
-	"strings"
 	"testing"
+	"time"
 
-	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
 func TestSchemaResource(t *testing.T) {
-	schemaName := "Custom." + strings.ReplaceAll(uuid.NewString(), "-", "")
-	schemaUpdatedName := "Custom." + strings.ReplaceAll(uuid.NewString(), "-", "")
+	// Use shorter names as the API has length limits for schema names
+	schemaName := fmt.Sprintf("Custom.Test%d", time.Now().Unix())
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -41,6 +40,7 @@ func TestSchemaResource(t *testing.T) {
 					resource.TestCheckResourceAttr("panther_schema.test", "is_field_discovery_enabled", "true"),
 					resource.TestCheckResourceAttrSet("panther_schema.test", "id"),
 					resource.TestCheckResourceAttrSet("panther_schema.test", "version"),
+					resource.TestCheckResourceAttrSet("panther_schema.test", "revision"),
 					resource.TestCheckResourceAttrSet("panther_schema.test", "spec"),
 				),
 			},
@@ -49,16 +49,19 @@ func TestSchemaResource(t *testing.T) {
 				ResourceName:      "panther_schema.test",
 				ImportState:       true,
 				ImportStateVerify: true,
+				// Ignore spec field during import verification due to API normalization
+				ImportStateVerifyIgnore: []string{"spec"},
 			},
 			// Update and Read testing
 			{
-				Config: providerConfig + testAccSchemaResourceConfigUpdated(schemaUpdatedName),
+				Config: providerConfig + testAccSchemaResourceConfigUpdated(schemaName),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("panther_schema.test", "name", schemaUpdatedName),
+					resource.TestCheckResourceAttr("panther_schema.test", "name", schemaName),
 					resource.TestCheckResourceAttr("panther_schema.test", "description", "Updated test schema for Terraform provider"),
 					resource.TestCheckResourceAttr("panther_schema.test", "is_field_discovery_enabled", "false"),
 					resource.TestCheckResourceAttrSet("panther_schema.test", "id"),
 					resource.TestCheckResourceAttrSet("panther_schema.test", "version"),
+					resource.TestCheckResourceAttrSet("panther_schema.test", "revision"),
 				),
 			},
 		},
@@ -71,10 +74,12 @@ resource "panther_schema" "test" {
   name        = %[1]q
   description = "Test schema for Terraform provider"
   spec = <<EOF
+schema: %[1]s
 fields:
   - name: timestamp
     type: timestamp
-    timeFormat: unix
+    timeFormats:
+      - unix
     isEventTime: true
   - name: message
     type: string
@@ -92,10 +97,12 @@ resource "panther_schema" "test" {
   name        = %[1]q
   description = "Updated test schema for Terraform provider"
   spec = <<EOF
+schema: %[1]s
 fields:
   - name: timestamp
     type: timestamp
-    timeFormat: unix
+    timeFormats:
+      - unix
     isEventTime: true
   - name: message
     type: string

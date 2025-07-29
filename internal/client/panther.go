@@ -35,7 +35,7 @@ type GraphQLClient interface {
 	// Schema management
 	CreateSchema(ctx context.Context, input CreateSchemaInput) (CreateSchemaOutput, error)
 	UpdateSchema(ctx context.Context, input UpdateSchemaInput) (UpdateSchemaOutput, error)
-	GetSchema(ctx context.Context, id string) (*Schema, error)
+	GetSchema(ctx context.Context, name string) (*Schema, error)
 	DeleteSchema(ctx context.Context, input DeleteSchemaInput) (DeleteSchemaOutput, error)
 	
 	// Role management (GraphQL)
@@ -349,21 +349,22 @@ type DeleteCloudAccountOutput struct {
 
 // GraphQL Schema types
 type Schema struct {
-	ID                      string   `graphql:"id"`
-	Name                    string   `graphql:"name"`
-	Description             string   `graphql:"description"`
-	Spec                    string   `graphql:"spec"`
-	Version                 int      `graphql:"version"`
-	LogTypes                []string `graphql:"logTypes"`
-	IsFieldDiscoveryEnabled bool     `graphql:"isFieldDiscoveryEnabled"`
+	Name                    string `graphql:"name"`
+	Description             string `graphql:"description"`
+	Spec                    string `graphql:"spec"`
+	Version                 int    `graphql:"version"`
+	Revision                int    `graphql:"revision"`
+	IsFieldDiscoveryEnabled bool   `graphql:"isFieldDiscoveryEnabled"`
+	CreatedAt               string `graphql:"createdAt"`
+	UpdatedAt               string `graphql:"updatedAt"`
 }
 
 type CreateSchemaInput struct {
-	Name                    string   `json:"name"`
-	Description             string   `json:"description"`
-	Spec                    string   `json:"spec"`
-	LogTypes                []string `json:"logTypes"`
-	IsFieldDiscoveryEnabled bool     `json:"isFieldDiscoveryEnabled"`
+	Name                    string `json:"name"`
+	Description             string `json:"description"`
+	Spec                    string `json:"spec"`
+	IsFieldDiscoveryEnabled bool   `json:"isFieldDiscoveryEnabled"`
+	Revision                *int   `json:"revision,omitempty"`
 }
 
 type CreateSchemaOutput struct {
@@ -371,12 +372,11 @@ type CreateSchemaOutput struct {
 }
 
 type UpdateSchemaInput struct {
-	ID                      string   `json:"id"`
-	Name                    string   `json:"name"`
-	Description             string   `json:"description"`
-	Spec                    string   `json:"spec"`
-	LogTypes                []string `json:"logTypes"`
-	IsFieldDiscoveryEnabled bool     `json:"isFieldDiscoveryEnabled"`
+	Name                    string `json:"name"`
+	Description             string `json:"description"`
+	Spec                    string `json:"spec"`
+	IsFieldDiscoveryEnabled bool   `json:"isFieldDiscoveryEnabled"`
+	Revision                *int   `json:"revision,omitempty"`
 }
 
 type UpdateSchemaOutput struct {
@@ -384,11 +384,11 @@ type UpdateSchemaOutput struct {
 }
 
 type DeleteSchemaInput struct {
-	ID string `json:"id"`
+	Name string `json:"name"`
 }
 
 type DeleteSchemaOutput struct {
-	ID string `json:"id"`
+	Name string `json:"name"`
 }
 
 // GraphQL Role types (matching actual API schema)

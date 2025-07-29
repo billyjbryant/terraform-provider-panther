@@ -21,7 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/hasura/go-graphql-client"
+	"github.com/machinebox/graphql"
 	"io"
 	"net/http"
 	"strings"
@@ -46,7 +46,8 @@ type APIClient struct {
 }
 
 type GraphQLClient struct {
-	*graphql.Client
+	client *graphql.Client
+	token  string
 }
 
 type RestClient struct {
@@ -56,9 +57,8 @@ type RestClient struct {
 
 func NewGraphQLClient(url, token string) *GraphQLClient {
 	return &GraphQLClient{
-		graphql.NewClient(
-			fmt.Sprintf("%s%s", url, GraphqlPath),
-			NewAuthorizedHTTPClient(token)),
+		client: graphql.NewClient(fmt.Sprintf("%s%s", url, GraphqlPath)),
+		token:  token,
 	}
 }
 
@@ -250,64 +250,131 @@ func (c *RestClient) DeleteHttpSource(ctx context.Context, id string) error {
 }
 
 func (c *GraphQLClient) UpdateS3Source(ctx context.Context, input client.UpdateS3SourceInput) (client.UpdateS3SourceOutput, error) {
-	var m struct {
-		UpdateS3Source struct {
-			client.UpdateS3SourceOutput
-		} `graphql:"updateS3Source(input: $input)"`
+	req := graphql.NewRequest(`
+		mutation($input: UpdateS3SourceInput!) {
+			updateS3Source(input: $input) {
+				logSource {
+					integrationId
+					integrationLabel
+					s3Bucket
+					s3Prefix
+					s3PrefixLogTypes {
+						prefix
+						logTypes
+					}
+				}
+			}
+		}
+	`)
+
+	req.Var("input", input)
+	req.Header.Set("X-API-Key", c.token)
+
+	var response struct {
+		UpdateS3Source client.UpdateS3SourceOutput `json:"updateS3Source"`
 	}
-	err := c.Mutate(ctx, &m, map[string]interface{}{
-		"input": input,
-	}, graphql.OperationName("UpdateS3Source"))
+
+	err := c.client.Run(ctx, req, &response)
 	if err != nil {
 		return client.UpdateS3SourceOutput{}, fmt.Errorf("GraphQL mutation failed: %v", err)
 	}
-	return m.UpdateS3Source.UpdateS3SourceOutput, nil
+	return response.UpdateS3Source, nil
 }
 
 func (c *GraphQLClient) DeleteSource(ctx context.Context, input client.DeleteSourceInput) (client.DeleteSourceOutput, error) {
-	var m struct {
+	req := graphql.NewRequest(`
+		mutation($input: DeleteSourceInput!) {
+			deleteSource(input: $input) {
+				__typename
+			}
+		}
+	`)
+
+	req.Var("input", input)
+	req.Header.Set("X-API-Key", c.token)
+
+	var response struct {
 		DeleteSource struct {
-			client.DeleteSourceOutput
-		} `graphql:"deleteSource(input: $input)"`
+			Typename string `json:"__typename"`
+		} `json:"deleteSource"`
 	}
-	err := c.Mutate(ctx, &m, map[string]interface{}{
-		"input": input,
-	}, graphql.OperationName("DeleteSource"))
+
+	err := c.client.Run(ctx, req, &response)
 	if err != nil {
 		return client.DeleteSourceOutput{}, fmt.Errorf("GraphQL mutation failed: %v", err)
 	}
-	return m.DeleteSource.DeleteSourceOutput, nil
+	return client.DeleteSourceOutput{}, nil
 }
 
 func (c *GraphQLClient) GetS3Source(ctx context.Context, id string) (*client.S3LogIntegration, error) {
-	var q struct {
-		Source struct {
-			S3LogIntegration client.S3LogIntegration `graphql:"... on S3LogIntegration"`
-		} `graphql:"source(id: $id)"`
+	req := graphql.NewRequest(`
+		query($id: ID!) {
+			source(id: $id) {
+				... on S3LogIntegration {
+					integrationId
+					integrationLabel
+					s3Bucket
+					s3Prefix
+					s3PrefixLogTypes {
+						prefix
+						logTypes
+						excludedPrefixes
+					}
+					awsAccountId
+					kmsKey
+					logProcessingRole
+					logStreamType
+					managedBucketNotifications
+				}
+			}
+		}
+	`)
+
+	req.Var("id", id)
+	req.Header.Set("X-API-Key", c.token)
+
+	var response struct {
+		Source client.S3LogIntegration `json:"source"`
 	}
 
-	err := c.Query(ctx, &q, map[string]interface{}{
-		"id": graphql.ID(id),
-	}, graphql.OperationName("Source"))
+	err := c.client.Run(ctx, req, &response)
 	if err != nil {
 		return nil, fmt.Errorf("GraphQL query failed: %v", err)
 	}
-	return &q.Source.S3LogIntegration, nil
+	return &response.Source, nil
 }
 
 func (c *GraphQLClient) CreateS3Source(ctx context.Context, input client.CreateS3SourceInput) (client.CreateS3SourceOutput, error) {
-	var m struct {
-		CreateS3Source struct {
-			client.CreateS3SourceOutput
-		} `graphql:"createS3Source(input: $input)"`
+	req := graphql.NewRequest(`
+		mutation($input: CreateS3SourceInput!) {
+			createS3Source(input: $input) {
+				logSource {
+					integrationId
+					integrationLabel
+					s3Bucket
+					s3Prefix
+					s3PrefixLogTypes {
+						prefix
+						logTypes
+					}
+					awsAccountId
+				}
+			}
+		}
+	`)
+
+	req.Var("input", input)
+	req.Header.Set("X-API-Key", c.token)
+
+	var response struct {
+		CreateS3Source client.CreateS3SourceOutput `json:"createS3Source"`
 	}
-	err := c.Mutate(ctx, &m, map[string]any{
-		"input": input,
-	}, graphql.OperationName("CreateS3Source"))
+
+	err := c.client.Run(ctx, req, &response)
 	if err != nil {
 		return client.CreateS3SourceOutput{}, fmt.Errorf("GraphQL mutation failed: %w", err)
 	}
-	return m.CreateS3Source.CreateS3SourceOutput, nil
+	return response.CreateS3Source, nil
 }
 
 func getErrorResponseMsg(resp *http.Response) string {
@@ -520,268 +587,570 @@ func (c *RestClient) DeleteGlobal(ctx context.Context, id string) error {
 
 // GraphQL Client methods for Cloud Accounts
 func (c *GraphQLClient) CreateCloudAccount(ctx context.Context, input client.CreateCloudAccountInput) (client.CreateCloudAccountOutput, error) {
-	var m struct {
-		CreateCloudAccount struct {
-			client.CreateCloudAccountOutput
-		} `graphql:"createCloudAccount(input: $input)"`
+	req := graphql.NewRequest(`
+		mutation($input: CreateCloudAccountInput!) {
+			createCloudAccount(input: $input) {
+				cloudAccount {
+					id
+					awsAccountId
+					label
+					awsStackName
+					awsScanConfig {
+						auditRole
+					}
+					awsRegionIgnoreList
+					resourceTypeIgnoreList
+					resourceRegexIgnoreList
+					isEditable
+				}
+			}
+		}
+	`)
+
+	req.Var("input", input)
+	req.Header.Set("X-API-Key", c.token)
+
+	var response struct {
+		CreateCloudAccount client.CreateCloudAccountOutput `json:"createCloudAccount"`
 	}
-	err := c.Mutate(ctx, &m, map[string]interface{}{
-		"input": input,
-	}, graphql.OperationName("CreateCloudAccount"))
+
+	err := c.client.Run(ctx, req, &response)
 	if err != nil {
 		return client.CreateCloudAccountOutput{}, fmt.Errorf("GraphQL mutation failed: %w", err)
 	}
-	return m.CreateCloudAccount.CreateCloudAccountOutput, nil
+	return response.CreateCloudAccount, nil
 }
 
 func (c *GraphQLClient) UpdateCloudAccount(ctx context.Context, input client.UpdateCloudAccountInput) (client.UpdateCloudAccountOutput, error) {
-	var m struct {
-		UpdateCloudAccount struct {
-			client.UpdateCloudAccountOutput
-		} `graphql:"updateCloudAccount(input: $input)"`
+	req := graphql.NewRequest(`
+		mutation($input: UpdateCloudAccountInput!) {
+			updateCloudAccount(input: $input) {
+				cloudAccount {
+					id
+					awsAccountId
+					label
+					awsStackName
+					awsScanConfig {
+						auditRole
+					}
+					awsRegionIgnoreList
+					resourceTypeIgnoreList
+					resourceRegexIgnoreList
+					isEditable
+				}
+			}
+		}
+	`)
+
+	req.Var("input", input)
+	req.Header.Set("X-API-Key", c.token)
+
+	var response struct {
+		UpdateCloudAccount client.UpdateCloudAccountOutput `json:"updateCloudAccount"`
 	}
-	err := c.Mutate(ctx, &m, map[string]interface{}{
-		"input": input,
-	}, graphql.OperationName("UpdateCloudAccount"))
+
+	err := c.client.Run(ctx, req, &response)
 	if err != nil {
 		return client.UpdateCloudAccountOutput{}, fmt.Errorf("GraphQL mutation failed: %w", err)
 	}
-	return m.UpdateCloudAccount.UpdateCloudAccountOutput, nil
+	return response.UpdateCloudAccount, nil
 }
 
 func (c *GraphQLClient) GetCloudAccount(ctx context.Context, id string) (*client.CloudAccount, error) {
-	var q struct {
-		CloudAccount client.CloudAccount `graphql:"cloudAccount(id: $id)"`
+	req := graphql.NewRequest(`
+		query($id: ID!) {
+			cloudAccount(id: $id) {
+				id
+				awsAccountId
+				label
+				awsStackName
+				awsScanConfig {
+					auditRole
+				}
+				awsRegionIgnoreList
+				resourceTypeIgnoreList
+				resourceRegexIgnoreList
+				isEditable
+			}
+		}
+	`)
+
+	req.Var("id", id)
+	req.Header.Set("X-API-Key", c.token)
+
+	var response struct {
+		CloudAccount client.CloudAccount `json:"cloudAccount"`
 	}
 
-	err := c.Query(ctx, &q, map[string]interface{}{
-		"id": graphql.ID(id),
-	}, graphql.OperationName("CloudAccount"))
+	err := c.client.Run(ctx, req, &response)
 	if err != nil {
 		return nil, fmt.Errorf("GraphQL query failed: %w", err)
 	}
-	return &q.CloudAccount, nil
+	return &response.CloudAccount, nil
 }
 
 func (c *GraphQLClient) DeleteCloudAccount(ctx context.Context, input client.DeleteCloudAccountInput) (client.DeleteCloudAccountOutput, error) {
-	var m struct {
-		DeleteCloudAccount struct {
-			client.DeleteCloudAccountOutput
-		} `graphql:"deleteCloudAccount(input: $input)"`
+	req := graphql.NewRequest(`
+		mutation($input: DeleteCloudAccountInput!) {
+			deleteCloudAccount(input: $input) {
+				id
+			}
+		}
+	`)
+
+	req.Var("input", input)
+	req.Header.Set("X-API-Key", c.token)
+
+	var response struct {
+		DeleteCloudAccount client.DeleteCloudAccountOutput `json:"deleteCloudAccount"`
 	}
-	err := c.Mutate(ctx, &m, map[string]interface{}{
-		"input": input,
-	}, graphql.OperationName("DeleteCloudAccount"))
+
+	err := c.client.Run(ctx, req, &response)
 	if err != nil {
 		return client.DeleteCloudAccountOutput{}, fmt.Errorf("GraphQL mutation failed: %w", err)
 	}
-	return m.DeleteCloudAccount.DeleteCloudAccountOutput, nil
+	return response.DeleteCloudAccount, nil
 }
 
-// GraphQL Client methods for Schemas
+// GraphQL Client methods for Schemas (using machinebox client)
 func (c *GraphQLClient) CreateSchema(ctx context.Context, input client.CreateSchemaInput) (client.CreateSchemaOutput, error) {
-	var m struct {
-		CreateSchema struct {
-			client.CreateSchemaOutput
-		} `graphql:"createSchema(input: $input)"`
+	req := graphql.NewRequest(`
+		mutation($input: CreateOrUpdateSchemaInput!) {
+			createOrUpdateSchema(input: $input) {
+				schema {
+					name
+					description
+					spec
+					version
+					revision
+					isFieldDiscoveryEnabled
+					createdAt
+					updatedAt
+				}
+			}
+		}
+	`)
+
+	req.Var("input", input)
+	req.Header.Set("X-API-Key", c.token)
+
+	var response struct {
+		CreateOrUpdateSchema client.CreateSchemaOutput `json:"createOrUpdateSchema"`
 	}
-	err := c.Mutate(ctx, &m, map[string]interface{}{
-		"input": input,
-	}, graphql.OperationName("CreateSchema"))
+
+	err := c.client.Run(ctx, req, &response)
 	if err != nil {
 		return client.CreateSchemaOutput{}, fmt.Errorf("GraphQL mutation failed: %w", err)
 	}
-	return m.CreateSchema.CreateSchemaOutput, nil
+
+	return response.CreateOrUpdateSchema, nil
 }
 
 func (c *GraphQLClient) UpdateSchema(ctx context.Context, input client.UpdateSchemaInput) (client.UpdateSchemaOutput, error) {
-	var m struct {
-		UpdateSchema struct {
-			client.UpdateSchemaOutput
-		} `graphql:"updateSchema(input: $input)"`
+	// Convert UpdateSchemaInput to CreateSchemaInput since they use the same mutation
+	createInput := client.CreateSchemaInput{
+		Name:                    input.Name,
+		Description:             input.Description,
+		Spec:                    input.Spec,
+		IsFieldDiscoveryEnabled: input.IsFieldDiscoveryEnabled,
+		Revision:                input.Revision,
 	}
-	err := c.Mutate(ctx, &m, map[string]interface{}{
-		"input": input,
-	}, graphql.OperationName("UpdateSchema"))
+
+	req := graphql.NewRequest(`
+		mutation($input: CreateOrUpdateSchemaInput!) {
+			createOrUpdateSchema(input: $input) {
+				schema {
+					name
+					description
+					spec
+					version
+					revision
+					isFieldDiscoveryEnabled
+					createdAt
+					updatedAt
+				}
+			}
+		}
+	`)
+
+	req.Var("input", createInput)
+	req.Header.Set("X-API-Key", c.token)
+
+	var response struct {
+		CreateOrUpdateSchema client.UpdateSchemaOutput `json:"createOrUpdateSchema"`
+	}
+
+	err := c.client.Run(ctx, req, &response)
 	if err != nil {
 		return client.UpdateSchemaOutput{}, fmt.Errorf("GraphQL mutation failed: %w", err)
 	}
-	return m.UpdateSchema.UpdateSchemaOutput, nil
+
+	return response.CreateOrUpdateSchema, nil
 }
 
-func (c *GraphQLClient) GetSchema(ctx context.Context, id string) (*client.Schema, error) {
-	var q struct {
-		Schema client.Schema `graphql:"schema(id: $id)"`
+func (c *GraphQLClient) GetSchema(ctx context.Context, name string) (*client.Schema, error) {
+	req := graphql.NewRequest(`
+		query($input: SchemasInput!) {
+			schemas(input: $input) {
+				edges {
+					node {
+						name
+						description
+						spec
+						version
+						revision
+						isFieldDiscoveryEnabled
+						createdAt
+						updatedAt
+					}
+				}
+			}
+		}
+	`)
+
+	input := map[string]interface{}{
+		"cursor": "",
 	}
 
-	err := c.Query(ctx, &q, map[string]interface{}{
-		"id": graphql.ID(id),
-	}, graphql.OperationName("Schema"))
+	req.Var("input", input)
+	req.Header.Set("X-API-Key", c.token)
+
+	var response struct {
+		Schemas struct {
+			Edges []struct {
+				Node client.Schema `json:"node"`
+			} `json:"edges"`
+		} `json:"schemas"`
+	}
+
+	err := c.client.Run(ctx, req, &response)
 	if err != nil {
 		return nil, fmt.Errorf("GraphQL query failed: %w", err)
 	}
-	return &q.Schema, nil
+
+	// Find schema by name
+	for _, edge := range response.Schemas.Edges {
+		if edge.Node.Name == name {
+			return &edge.Node, nil
+		}
+	}
+
+	return nil, nil // Schema not found
 }
 
 func (c *GraphQLClient) DeleteSchema(ctx context.Context, input client.DeleteSchemaInput) (client.DeleteSchemaOutput, error) {
-	var m struct {
-		DeleteSchema struct {
-			client.DeleteSchemaOutput
-		} `graphql:"deleteSchema(input: $input)"`
+	req := graphql.NewRequest(`
+		mutation($input: UpdateSchemaStatusInput!) {
+			updateSchemaStatus(input: $input) {
+				schema {
+					name
+				}
+			}
+		}
+	`)
+
+	statusInput := map[string]interface{}{
+		"name":       input.Name,
+		"isArchived": true,
 	}
-	err := c.Mutate(ctx, &m, map[string]interface{}{
-		"input": input,
-	}, graphql.OperationName("DeleteSchema"))
+
+	req.Var("input", statusInput)
+	req.Header.Set("X-API-Key", c.token)
+
+	var response struct {
+		UpdateSchemaStatus struct {
+			Schema client.Schema `json:"schema"`
+		} `json:"updateSchemaStatus"`
+	}
+
+	err := c.client.Run(ctx, req, &response)
 	if err != nil {
 		return client.DeleteSchemaOutput{}, fmt.Errorf("GraphQL mutation failed: %w", err)
 	}
-	return m.DeleteSchema.DeleteSchemaOutput, nil
+
+	return client.DeleteSchemaOutput{Name: response.UpdateSchemaStatus.Schema.Name}, nil
 }
 
 // GraphQL Role methods
 func (c *GraphQLClient) CreateRole(ctx context.Context, input client.CreateRoleInput) (client.CreateRoleOutput, error) {
-	var m struct {
-		CreateRole struct {
-			client.CreateRoleOutput
-		} `graphql:"createRole(input: $input)"`
+	req := graphql.NewRequest(`
+		mutation($input: CreateRoleInput!) {
+			createRole(input: $input) {
+				role {
+					id
+					name
+					permissions
+				}
+			}
+		}
+	`)
+
+	req.Var("input", input)
+	req.Header.Set("X-API-Key", c.token)
+
+	var response struct {
+		CreateRole client.CreateRoleOutput `json:"createRole"`
 	}
-	err := c.Mutate(ctx, &m, map[string]interface{}{
-		"input": input,
-	}, graphql.OperationName("CreateRole"))
+
+	err := c.client.Run(ctx, req, &response)
 	if err != nil {
 		return client.CreateRoleOutput{}, fmt.Errorf("GraphQL mutation failed: %w", err)
 	}
-	return m.CreateRole.CreateRoleOutput, nil
+	return response.CreateRole, nil
 }
 
 func (c *GraphQLClient) UpdateRole(ctx context.Context, input client.UpdateRoleInput) (client.UpdateRoleOutput, error) {
-	var m struct {
-		UpdateRole struct {
-			client.UpdateRoleOutput
-		} `graphql:"updateRole(input: $input)"`
+	req := graphql.NewRequest(`
+		mutation($input: UpdateRoleInput!) {
+			updateRole(input: $input) {
+				role {
+					id
+					name
+					permissions
+				}
+			}
+		}
+	`)
+
+	req.Var("input", input)
+	req.Header.Set("X-API-Key", c.token)
+
+	var response struct {
+		UpdateRole client.UpdateRoleOutput `json:"updateRole"`
 	}
-	err := c.Mutate(ctx, &m, map[string]interface{}{
-		"input": input,
-	}, graphql.OperationName("UpdateRole"))
+
+	err := c.client.Run(ctx, req, &response)
 	if err != nil {
 		return client.UpdateRoleOutput{}, fmt.Errorf("GraphQL mutation failed: %w", err)
 	}
-	return m.UpdateRole.UpdateRoleOutput, nil
+	return response.UpdateRole, nil
 }
 
 func (c *GraphQLClient) GetRoleById(ctx context.Context, id string) (*client.Role, error) {
-	var q struct {
-		RoleById client.Role `graphql:"roleById(id: $id)"`
+	req := graphql.NewRequest(`
+		query($id: ID!) {
+			roleById(id: $id) {
+				id
+				name
+				permissions
+			}
+		}
+	`)
+
+	req.Var("id", id)
+	req.Header.Set("X-API-Key", c.token)
+
+	var response struct {
+		RoleById client.Role `json:"roleById"`
 	}
 
-	err := c.Query(ctx, &q, map[string]interface{}{
-		"id": graphql.ID(id),
-	}, graphql.OperationName("RoleById"))
+	err := c.client.Run(ctx, req, &response)
 	if err != nil {
 		return nil, fmt.Errorf("GraphQL query failed: %w", err)
 	}
-	return &q.RoleById, nil
+	return &response.RoleById, nil
 }
 
 func (c *GraphQLClient) GetRoleByName(ctx context.Context, name string) (*client.Role, error) {
-	var q struct {
-		RoleByName client.Role `graphql:"roleByName(name: $name)"`
+	req := graphql.NewRequest(`
+		query($name: String!) {
+			roleByName(name: $name) {
+				id
+				name
+				permissions
+			}
+		}
+	`)
+
+	req.Var("name", name)
+	req.Header.Set("X-API-Key", c.token)
+
+	var response struct {
+		RoleByName client.Role `json:"roleByName"`
 	}
 
-	err := c.Query(ctx, &q, map[string]interface{}{
-		"name": name,
-	}, graphql.OperationName("RoleByName"))
+	err := c.client.Run(ctx, req, &response)
 	if err != nil {
 		return nil, fmt.Errorf("GraphQL query failed: %w", err)
 	}
-	return &q.RoleByName, nil
+	return &response.RoleByName, nil
 }
 
 func (c *GraphQLClient) DeleteRole(ctx context.Context, input client.DeleteRoleInput) (client.DeleteRoleOutput, error) {
-	var m struct {
+	req := graphql.NewRequest(`
+		mutation($input: DeleteRoleInput!) {
+			deleteRole(input: $input) {
+				__typename
+			}
+		}
+	`)
+
+	req.Var("input", input)
+	req.Header.Set("X-API-Key", c.token)
+
+	var response struct {
 		DeleteRole struct {
-			client.DeleteRoleOutput
-		} `graphql:"deleteRole(input: $input)"`
+			Typename string `json:"__typename"`
+		} `json:"deleteRole"`
 	}
-	err := c.Mutate(ctx, &m, map[string]interface{}{
-		"input": input,
-	}, graphql.OperationName("DeleteRole"))
+
+	err := c.client.Run(ctx, req, &response)
 	if err != nil {
 		return client.DeleteRoleOutput{}, fmt.Errorf("GraphQL mutation failed: %w", err)
 	}
-	return m.DeleteRole.DeleteRoleOutput, nil
+	return client.DeleteRoleOutput{}, nil
 }
 
 // GraphQL User methods
 func (c *GraphQLClient) InviteUser(ctx context.Context, input client.InviteUserInput) (client.InviteUserOutput, error) {
-	var m struct {
-		InviteUser struct {
-			client.InviteUserOutput
-		} `graphql:"inviteUser(input: $input)"`
+	req := graphql.NewRequest(`
+		mutation($input: InviteUserInput!) {
+			inviteUser(input: $input) {
+				user {
+					id
+					email
+					familyName
+					givenName
+					status
+					role {
+						id
+						name
+					}
+				}
+			}
+		}
+	`)
+
+	req.Var("input", input)
+	req.Header.Set("X-API-Key", c.token)
+
+	var response struct {
+		InviteUser client.InviteUserOutput `json:"inviteUser"`
 	}
-	err := c.Mutate(ctx, &m, map[string]interface{}{
-		"input": input,
-	}, graphql.OperationName("InviteUser"))
+
+	err := c.client.Run(ctx, req, &response)
 	if err != nil {
 		return client.InviteUserOutput{}, fmt.Errorf("GraphQL mutation failed: %w", err)
 	}
-	return m.InviteUser.InviteUserOutput, nil
+	return response.InviteUser, nil
 }
 
 func (c *GraphQLClient) UpdateUser(ctx context.Context, input client.UpdateUserInput) (client.UpdateUserOutput, error) {
-	var m struct {
-		UpdateUser struct {
-			client.UpdateUserOutput
-		} `graphql:"updateUser(input: $input)"`
+	req := graphql.NewRequest(`
+		mutation($input: UpdateUserInput!) {
+			updateUser(input: $input) {
+				user {
+					id
+					email
+					familyName
+					givenName
+					status
+					role {
+						id
+						name
+					}
+				}
+			}
+		}
+	`)
+
+	req.Var("input", input)
+	req.Header.Set("X-API-Key", c.token)
+
+	var response struct {
+		UpdateUser client.UpdateUserOutput `json:"updateUser"`
 	}
-	err := c.Mutate(ctx, &m, map[string]interface{}{
-		"input": input,
-	}, graphql.OperationName("UpdateUser"))
+
+	err := c.client.Run(ctx, req, &response)
 	if err != nil {
 		return client.UpdateUserOutput{}, fmt.Errorf("GraphQL mutation failed: %w", err)
 	}
-	return m.UpdateUser.UpdateUserOutput, nil
+	return response.UpdateUser, nil
 }
 
 func (c *GraphQLClient) GetUserById(ctx context.Context, id string) (*client.User, error) {
-	var q struct {
-		UserById client.User `graphql:"userById(id: $id)"`
+	req := graphql.NewRequest(`
+		query($id: ID!) {
+			userById(id: $id) {
+				id
+				email
+				familyName
+				givenName
+				status
+				role {
+					id
+					name
+				}
+			}
+		}
+	`)
+
+	req.Var("id", id)
+	req.Header.Set("X-API-Key", c.token)
+
+	var response struct {
+		UserById client.User `json:"userById"`
 	}
 
-	err := c.Query(ctx, &q, map[string]interface{}{
-		"id": graphql.ID(id),
-	}, graphql.OperationName("UserById"))
+	err := c.client.Run(ctx, req, &response)
 	if err != nil {
 		return nil, fmt.Errorf("GraphQL query failed: %w", err)
 	}
-	return &q.UserById, nil
+	return &response.UserById, nil
 }
 
 func (c *GraphQLClient) GetUserByEmail(ctx context.Context, email string) (*client.User, error) {
-	var q struct {
-		UserByEmail client.User `graphql:"userByEmail(email: $email)"`
+	req := graphql.NewRequest(`
+		query($email: String!) {
+			userByEmail(email: $email) {
+				id
+				email
+				familyName
+				givenName
+				status
+				role {
+					id
+					name
+				}
+			}
+		}
+	`)
+
+	req.Var("email", email)
+	req.Header.Set("X-API-Key", c.token)
+
+	var response struct {
+		UserByEmail client.User `json:"userByEmail"`
 	}
 
-	err := c.Query(ctx, &q, map[string]interface{}{
-		"email": email,
-	}, graphql.OperationName("UserByEmail"))
+	err := c.client.Run(ctx, req, &response)
 	if err != nil {
 		return nil, fmt.Errorf("GraphQL query failed: %w", err)
 	}
-	return &q.UserByEmail, nil
+	return &response.UserByEmail, nil
 }
 
 func (c *GraphQLClient) DeleteUser(ctx context.Context, input client.DeleteUserInput) (client.DeleteUserOutput, error) {
-	var m struct {
+	req := graphql.NewRequest(`
+		mutation($input: DeleteUserInput!) {
+			deleteUser(input: $input) {
+				__typename
+			}
+		}
+	`)
+
+	req.Var("input", input)
+	req.Header.Set("X-API-Key", c.token)
+
+	var response struct {
 		DeleteUser struct {
-			client.DeleteUserOutput
-		} `graphql:"deleteUser(input: $input)"`
+			Typename string `json:"__typename"`
+		} `json:"deleteUser"`
 	}
-	err := c.Mutate(ctx, &m, map[string]interface{}{
-		"input": input,
-	}, graphql.OperationName("DeleteUser"))
+
+	err := c.client.Run(ctx, req, &response)
 	if err != nil {
 		return client.DeleteUserOutput{}, fmt.Errorf("GraphQL mutation failed: %w", err)
 	}
-	return m.DeleteUser.DeleteUserOutput, nil
+	return client.DeleteUserOutput{}, nil
 }

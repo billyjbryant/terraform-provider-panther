@@ -19,6 +19,7 @@ package provider
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -27,19 +28,20 @@ import (
 )
 
 func TestS3SourceResource(t *testing.T) {
+	testName := fmt.Sprintf("test-s3-%d", time.Now().Unix())
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			// Create and Read testing
 			{
-				Config: providerConfig + testS3SourceResourceConfig("test-source"),
+				Config: providerConfig + testS3SourceResourceConfig(testName),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("panther_s3_source.test", "aws_account_id", "111122223333"),
-					resource.TestCheckResourceAttr("panther_s3_source.test", "name", "test-source"),
+					resource.TestCheckResourceAttr("panther_s3_source.test", "name", testName),
 					resource.TestCheckResourceAttr("panther_s3_source.test", "log_processing_role_arn", "arn:aws:iam::111122223333:role/TestRole"),
 					resource.TestCheckResourceAttr("panther_s3_source.test", "log_stream_type", "Lines"),
 					resource.TestCheckResourceAttr("panther_s3_source.test", "panther_managed_bucket_notifications_enabled", "true"),
-					resource.TestCheckResourceAttr("panther_s3_source.test", "bucket_name", "test_bucket"),
+					resource.TestCheckResourceAttr("panther_s3_source.test", "bucket_name", testName+"-bucket"),
 					resource.TestCheckResourceAttr("panther_s3_source.test", "kms_key_arn", "arn:aws:kms:us-east-1:111122223333:key/testing"),
 					resource.TestCheckResourceAttr("panther_s3_source.test", "prefix_log_types.0.prefix", "test/prefix"),
 					resource.TestCheckResourceAttr("panther_s3_source.test", "prefix_log_types.0.excluded_prefixes.0", "test/prefix/excluded"),
@@ -54,9 +56,9 @@ func TestS3SourceResource(t *testing.T) {
 			},
 			// Update and Read testing
 			{
-				Config: providerConfig + testS3SourceResourceConfig("test-source-updated"),
+				Config: providerConfig + testS3SourceResourceConfig(testName+"-updated"),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("panther_s3_source.test", "name", "test-source-updated"),
+					resource.TestCheckResourceAttr("panther_s3_source.test", "name", testName+"-updated"),
 				),
 			},
 			// Delete testing automatically occurs in TestCase
@@ -122,7 +124,7 @@ resource "panther_s3_source" "test" {
   log_processing_role_arn = "arn:aws:iam::111122223333:role/TestRole"
   log_stream_type = "Lines"
   panther_managed_bucket_notifications_enabled = true
-  bucket_name = "test_bucket"
+  bucket_name = "%v-bucket"
   kms_key_arn = "arn:aws:kms:us-east-1:111122223333:key/testing"
   prefix_log_types = [{
     excluded_prefixes = ["test/prefix/excluded"]
@@ -130,5 +132,5 @@ resource "panther_s3_source" "test" {
     prefix            = "test/prefix"
   }]
 }
-`, name)
+`, name, name)
 }
