@@ -35,6 +35,7 @@ var (
 	_ resource.Resource                = (*userResource)(nil)
 	_ resource.ResourceWithConfigure   = (*userResource)(nil)
 	_ resource.ResourceWithImportState = (*userResource)(nil)
+	_ resource.ResourceWithUpgradeState = (*userResource)(nil)
 )
 
 func NewUserResource() resource.Resource {
@@ -51,6 +52,7 @@ func (r *userResource) Metadata(ctx context.Context, req resource.MetadataReques
 
 func (r *userResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = resource_user.UserResourceSchema(ctx)
+	resp.Schema.Version = 1
 	// Add UseStateForUnknown plan modifier to the id attribute
 	idAttr := resp.Schema.Attributes["id"].(schema.StringAttribute)
 	idAttr.PlanModifiers = append(idAttr.PlanModifiers, stringplanmodifier.UseStateForUnknown())
@@ -254,4 +256,78 @@ func (r *userResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 
 func (r *userResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+}
+
+func (r *userResource) UpgradeState(ctx context.Context) map[int64]resource.StateUpgrader {
+	return map[int64]resource.StateUpgrader{
+		0: {
+			PriorSchema: &schema.Schema{
+				Attributes: map[string]schema.Attribute{
+					"id": schema.StringAttribute{
+						Computed: true,
+					},
+					"created_at": schema.StringAttribute{
+						Computed: true,
+					},
+					"email": schema.StringAttribute{
+						Required: true,
+					},
+					"enabled": schema.BoolAttribute{
+						Computed: true,
+					},
+					"family_name": schema.StringAttribute{
+						Required: true,
+					},
+					"given_name": schema.StringAttribute{
+						Required: true,
+					},
+					"last_logged_in_at": schema.StringAttribute{
+						Computed: true,
+					},
+					"role": schema.StringAttribute{
+						Required: true,
+					},
+					"status": schema.StringAttribute{
+						Computed: true,
+					},
+				},
+			},
+			StateUpgrader: func(ctx context.Context, req resource.UpgradeStateRequest, resp *resource.UpgradeStateResponse) {
+				var priorStateData struct {
+					ID             types.String `tfsdk:"id"`
+					CreatedAt      types.String `tfsdk:"created_at"`
+					Email          types.String `tfsdk:"email"`
+					Enabled        types.Bool   `tfsdk:"enabled"`
+					FamilyName     types.String `tfsdk:"family_name"`
+					GivenName      types.String `tfsdk:"given_name"`
+					LastLoggedInAt types.String `tfsdk:"last_logged_in_at"`
+					Role           types.String `tfsdk:"role"`
+					Status         types.String `tfsdk:"status"`
+				}
+
+				resp.Diagnostics.Append(req.State.Get(ctx, &priorStateData)...)
+				if resp.Diagnostics.HasError() {
+					return
+				}
+
+				// Convert string role to object role
+				upgradedStateData := resource_user.UserModel{
+					ID:             priorStateData.ID,
+					CreatedAt:      priorStateData.CreatedAt,
+					Email:          priorStateData.Email,
+					Enabled:        priorStateData.Enabled,
+					FamilyName:     priorStateData.FamilyName,
+					GivenName:      priorStateData.GivenName,
+					LastLoggedInAt: priorStateData.LastLoggedInAt,
+					Status:         priorStateData.Status,
+					Role: resource_user.RoleValue{
+						ID:   types.StringNull(),
+						Name: priorStateData.Role,
+					},
+				}
+
+				resp.Diagnostics.Append(resp.State.Set(ctx, upgradedStateData)...)
+			},
+		},
+	}
 }
