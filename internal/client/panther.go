@@ -68,6 +68,18 @@ type RestClient interface {
 	UpdateSimpleRule(ctx context.Context, input UpdateSimpleRuleInput) (SimpleRule, error)
 	GetSimpleRule(ctx context.Context, id string) (SimpleRule, error)
 	DeleteSimpleRule(ctx context.Context, id string) error
+
+	// Users management
+	CreateUser(ctx context.Context, input CreateUserInput) (User, error)
+	UpdateUser(ctx context.Context, input UpdateUserInput) (User, error)
+	GetUser(ctx context.Context, id string) (User, error)
+	DeleteUser(ctx context.Context, id string) error
+
+	// Roles management
+	CreateRole(ctx context.Context, input CreateRoleInput) (Role, error)
+	UpdateRole(ctx context.Context, input UpdateRoleInput) (Role, error)
+	GetRole(ctx context.Context, id string) (Role, error)
+	DeleteRole(ctx context.Context, id string) error
 }
 
 // CreateS3SourceInput Input for the createS3LogSource mutation
@@ -445,4 +457,65 @@ type DeleteSchemaInput struct {
 
 type DeleteSchemaOutput struct {
 	Name string `json:"name"`
+}
+
+// User types
+type User struct {
+	ID             string      `json:"id"`
+	CreatedAt      string      `json:"createdAt,omitempty"`
+	Email          string      `json:"email"`
+	Enabled        bool        `json:"enabled"`
+	FamilyName     string      `json:"familyName"`
+	GivenName      string      `json:"givenName"`
+	LastLoggedInAt string      `json:"lastLoggedInAt,omitempty"`
+	Role           UserRoleRef `json:"role"`
+	Status         string      `json:"status,omitempty"`
+}
+
+type UserRoleRef struct {
+	ID   string `json:"id,omitempty"`
+	Name string `json:"name,omitempty"`
+}
+
+type UserModifiableAttributes struct {
+	Email      string      `json:"email"`
+	FamilyName string      `json:"familyName"`
+	GivenName  string      `json:"givenName"`
+	Role       UserRoleRef `json:"role"`
+}
+
+type CreateUserInput struct {
+	UserModifiableAttributes
+}
+
+type UpdateUserInput struct {
+	ID string
+	UserModifiableAttributes
+}
+
+// Role types
+type Role struct {
+	ID                string   `json:"id"`
+	CreatedAt         string   `json:"createdAt,omitempty"`
+	UpdatedAt         string   `json:"updatedAt,omitempty"`
+	Name              string   `json:"name"`
+	Permissions       []string `json:"permissions"`
+	LogTypeAccess     []string `json:"logTypeAccess,omitempty"`
+	LogTypeAccessKind string   `json:"logTypeAccessKind,omitempty"`
+}
+
+type RoleModifiableAttributes struct {
+	Name              string   `json:"name"`
+	Permissions       []string `json:"permissions"`
+	LogTypeAccess     []string `json:"logTypeAccess,omitempty"`
+	LogTypeAccessKind string   `json:"logTypeAccessKind,omitempty"`
+}
+
+type CreateRoleInput struct {
+	RoleModifiableAttributes
+}
+
+type UpdateRoleInput struct {
+	ID string
+	RoleModifiableAttributes
 }
