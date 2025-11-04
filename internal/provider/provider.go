@@ -136,6 +136,8 @@ func (p *PantherProvider) Resources(ctx context.Context) []func() resource.Resou
 		NewSimpleRuleResource,
 		NewCloudAccountResource,
 		NewSchemaResource,
+		NewUserResource,
+		NewRoleResource,
 	}
 }
 
